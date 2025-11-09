@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistem Ujian Sekolah</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+  <div id="app" class="bg-white shadow-2xl rounded-2xl p-6 w-full max-w-2xl transition-all duration-500">
+    <h1 class="text-3xl font-bold text-center text-blue-700 mb-4">💻 Ujian Sekolah</h1>
+    <div id="screen"></div>
+  </div>
+
+  <script>
+    let step = "login";
+    let nama = "", kelas = "";
+    let jawaban = {};
+    let score = 0;
+    let waktuSisa = 300; // 5 menit
+    let timerInterval;
+
+    const soal = [
+      { 
+        nomor: 1, tipe: "pg", 
+        pertanyaan: "Ibukota Indonesia adalah ...", 
+        opsi: ["Jakarta", "Surabaya", "Bandung", "Medan"], 
+        kunci: "Jakarta"
+      },
+      { 
+        nomor: 2, tipe: "benar_salah", 
+        pertanyaan: "Gunung Semeru terletak di Pulau Jawa.", 
+        opsi: ["Benar", "Salah"], 
+        kunci: "Benar"
+      },
+      { 
+        nomor: 3, tipe: "isian", 
+        pertanyaan: "Sebutkan nama benua terbesar di dunia!", 
+        kunci: "Asia"
+      },
+      { 
+        nomor: 4, tipe: "pg", 
+        pertanyaan: "Lambang negara Indonesia adalah ...", 
+        opsi: ["Elang", "Garuda", "Merpati", "Rajawali"], 
+        kunci: "Garuda"
+      }
+    ];
+
+    function render() {
+      const screen = document.getElementById("screen");
+
+      if (step === "login") {
+        screen.innerHTML = `
+          <div class="space-y-4">
+            <input id="nama" placeholder="Nama Siswa" class="border p-2 w-full rounded" />
+            <input id="kelas" placeholder="Kelas (misal: 9A)" class="border p-2 w-full rounded" />
+            <button onclick="startExam()" class="bg-blue-700 text-white px-4 py-2 w-full rounded hover:bg-blue-800">Mulai Ujian</button>
+          </div>
+        `;
+      }
+
+      else if (step === "exam") {
+        let html = `
+          <div class="flex justify-between items-center mb-4">
+            <p class="font-semibold">Nama: ${nama} (${kelas})</p>
+            <p id="timer" class="text-red-600 font-semibold"></p>
+          </div>
+        `;
+
+        soal.forEach((s) => {
+          html += `<div class="mb-6 border-b pb-3">
+            <p class="font-semibold mb-2">${s.nomor}. ${s.pertanyaan}</p>`;
+
+          if (s.tipe === "pg" || s.tipe === "benar_salah") {
+            s.opsi.forEach((opsi) => {
+              html += `
+                <label class="block mb-1">
+                  <input type="radio" name="soal${s.nomor}" value="${opsi}" class="mr-2" />
+                  ${opsi}
+                </label>
+              `;
+            });
+          } else if (s.tipe === "isian") {
+            html += `<input type="text" name="soal${s.nomor}" placeholder="Ketik jawaban..." class="border p-2 w-full rounded" />`;
+          }
+
+          html += `</div>`;
+        });
+
+        html += `
+          <button onclick="finishExam()" class="bg-green-700 text-white px-4 py-2 rounded w-full hover:bg-green-800">Kirim Jawaban</button>
+        `;
+        screen.innerHTML = html;
+        mulaiTimer();
+      }
+
+      else if (step === "result") {
+        screen.innerHTML = `
+          <div class="text-center space-y-4">
+            <h2 class="text-2xl font-semibold text-green-700">Ujian Selesai!</h2>
+            <p>Nama: <strong>${nama}</strong></p>
+            <p>Kelas: <strong>${kelas}</strong></p>
+            <p>Nilai: <span class="font-bold text-2xl text-blue-700">${score}</span></p>
+            <button onclick="downloadPDF()" class="bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-800 w-full">Unduh Hasil (PDF)</button>
+            <button onclick="location.reload()" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 w-full">Ulangi Ujian</button>
+          </div>
+        `;
+      }
+    }
+
+    function startExam() {
+      nama = document.getElementById("nama").value.trim();
+      kelas = document.getElementById("kelas").value.trim();
+      if (nama === "" || kelas === "") {
+        alert("Nama dan kelas harus diisi!");
+        return;
+      }
+      step = "exam";
+      render();
+    }
+
+    function finishExam() {
+      soal.forEach((s) => {
+        const input = document.querySelector(`[name="soal${s.nomor}"]:checked`) || document.querySelector(`[name="soal${s.nomor}"]`);
+        if (input) {
+          jawaban[s.nomor] = input.value.trim();
+        }
+      });
+
+      clearInterval(timerInterval);
+      let benar = 0;
+      soal.forEach((s) => {
+        if (jawaban[s.nomor] && jawaban[s.nomor].toLowerCase() === s.kunci.toLowerCase()) benar++;
+      });
+      score = Math.round((benar / soal.length) * 100);
+      step = "result";
+      render();
+    }
+
+    function mulaiTimer() {
+      updateTimer();
+      timerInterval = setInterval(() => {
+        waktuSisa--;
+        updateTimer();
+        if (waktuSisa <= 0) {
+          clearInterval(timerInterval);
+          alert("Waktu habis! Ujian otomatis dikirim.");
+          finishExam();
+        }
+      }, 1000);
+    }
+
+    function updateTimer() {
+      const timer = document.getElementById("timer");
+      if (timer) {
+        const menit = Math.floor(waktuSisa / 60);
+        const detik = waktuSisa % 60;
+        timer.textContent = `${menit}:${detik.toString().padStart(2, "0")}`;
+      }
+    }
+
+    async function downloadPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.text("HASIL UJIAN SEKOLAH", 70, 20);
+      doc.text(`Nama: ${nama}`, 20, 40);
+      doc.text(`Kelas: ${kelas}`, 20, 50);
+      doc.text(`Nilai: ${score}`, 20, 60);
+      doc.text("Tanggal: " + new Date().toLocaleString(), 20, 70);
+      doc.save(`Hasil_Ujian_${nama.replace(/\s+/g, "_")}.pdf`);
+    }
+
+    render();
+  </script>
+</body>
+</html>
